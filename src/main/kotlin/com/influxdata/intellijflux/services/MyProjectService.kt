@@ -1,7 +1,7 @@
-package com.github.onelson.intellijflux.services
+package com.influxdata.intellijflux.services
 
 import com.intellij.openapi.project.Project
-import com.github.onelson.intellijflux.MyBundle
+import com.influxdata.intellijflux.MyBundle
 
 class MyProjectService(project: Project) {
 

@@ -1,4 +1,4 @@
-package com.github.onelson.intellijflux
+package com.influxdata.intellijflux
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls

@@ -1,9 +1,9 @@
-package com.github.onelson.intellijflux.listeners
+package com.influxdata.intellijflux.listeners
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManagerListener
-import com.github.onelson.intellijflux.services.MyProjectService
+import com.influxdata.intellijflux.services.MyProjectService
 
 internal class MyProjectManagerListener : ProjectManagerListener {
 
