@@ -1,7 +1,8 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.influxdata.intellijflux</id>
-    <name>intellij-flux</name>
+
+    <name>Flux Language Support</name>
     <vendor>InfluxData</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -9,6 +10,10 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.influxdata.intellijflux.services.MyApplicationService"/>
         <projectService serviceImplementation="com.influxdata.intellijflux.services.MyProjectService"/>
+        <fileType name="Flux file"
+                  implementationClass="com.influxdata.intellijflux.language.FluxFileType"
+                  language="Flux"
+                  extensions="flux"/>
     </extensions>
 
     <applicationListeners>
