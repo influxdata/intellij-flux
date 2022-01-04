@@ -1,6 +1,6 @@
-package org.jetbrains.plugins.template.services
+package com.github.onelson.intellijflux.services
 
-import org.jetbrains.plugins.template.MyBundle
+import com.github.onelson.intellijflux.MyBundle
 
 class MyApplicationService {
 
