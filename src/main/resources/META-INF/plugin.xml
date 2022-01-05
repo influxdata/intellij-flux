@@ -6,6 +6,7 @@
     <vendor>InfluxData</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.github.gtache.lsp</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.influxdata.intellijflux.services.MyApplicationService"/>
@@ -14,6 +15,9 @@
                   implementationClass="com.influxdata.intellijflux.language.FluxFileType"
                   language="Flux"
                   extensions="flux"/>
+        <preloadingActivity
+                implementation="com.influxdata.intellijflux.FluxPreloadingActivity"
+                id="com.influxdata.intellijflux.FluxPreloadingActivity"/>
     </extensions>
 
     <applicationListeners>
