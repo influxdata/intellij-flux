@@ -18,6 +18,11 @@
         <preloadingActivity
                 implementation="com.influxdata.intellijflux.FluxPreloadingActivity"
                 id="com.influxdata.intellijflux.FluxPreloadingActivity"/>
+
+        <applicationService serviceImplementation="com.influxdata.intellijflux.settings.AppSettingsState"/>
+        <applicationConfigurable parentId="tools" instance="com.influxdata.intellijflux.settings.AppSettingsConfigurable"
+                                 id="com.influxdata.intellijflux.settings.AppSettingsConfigurable"
+                                 displayName="Flux Language"/>
     </extensions>
 
     <applicationListeners>
