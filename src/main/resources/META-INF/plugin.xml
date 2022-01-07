@@ -6,8 +6,11 @@
     <vendor>InfluxData</vendor>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.github.gtache.lsp</depends>
-
+    <application-components>
+        <component>
+            <implementation-class>org.wso2.lsp4intellij.IntellijLanguageClient</implementation-class>
+        </component>
+    </application-components>
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.influxdata.intellijflux.services.MyApplicationService"/>
         <projectService serviceImplementation="com.influxdata.intellijflux.services.MyProjectService"/>
@@ -15,10 +18,37 @@
                   implementationClass="com.influxdata.intellijflux.language.FluxFileType"
                   language="Flux"
                   extensions="flux"/>
+
+
         <preloadingActivity
                 implementation="com.influxdata.intellijflux.FluxPreloadingActivity"
                 id="com.influxdata.intellijflux.FluxPreloadingActivity"/>
+
+
+        <completion.contributor implementationClass="org.wso2.lsp4intellij.contributors.LSPCompletionContributor"
+                                id="LSPCompletionContributor" language="any"/>
+        <externalAnnotator id="LSPAnnotator" language="Flux"
+                           implementationClass="org.wso2.lsp4intellij.contributors.annotator.LSPAnnotator"/>
+        <gotoSymbolContributor implementation="org.wso2.lsp4intellij.contributors.symbol.LSPSymbolContributor"
+                               id="LSPSymbolContributor"/>
+
+        <renameHandler implementation="org.wso2.lsp4intellij.contributors.rename.LSPRenameHandler"
+                       id="LSPRenameHandler" order="first"/>
+        <renamePsiElementProcessor implementation="org.wso2.lsp4intellij.contributors.rename.LSPRenameProcessor"
+                                   id="LSPRenameProcessor" order="first"/>
+        <typedHandler implementation="org.wso2.lsp4intellij.listeners.LSPTypedHandler"
+                      id="LSPTypedHandler"/>
+
     </extensions>
+
+    <actions>
+        <!-- Reformat doesn't appear to work... -->
+        <action class="org.wso2.lsp4intellij.actions.LSPReformatAction" id="ReformatCode" use-shortcut-of="ReformatCode"
+                overrides="true" text="Reformat Code"/>
+        <action class="org.wso2.lsp4intellij.actions.LSPShowReformatDialogAction" id="ShowReformatFileDialog"
+                use-shortcut-of="ShowReformatFileDialog" overrides="true" text="Show Reformat File Dialog"/>
+    </actions>
+
 
     <applicationListeners>
         <listener class="com.influxdata.intellijflux.listeners.MyProjectManagerListener"
