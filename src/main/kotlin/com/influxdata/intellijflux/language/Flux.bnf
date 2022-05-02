@@ -1,0 +1,20 @@
+{
+  parserClass="com.influxdata.intellijflux.language.parser.FluxParser"
+
+  extends="com.intellij.extapi.psi.ASTWrapperPsiElement"
+
+  psiClassPrefix="Simple"
+  psiImplClassSuffix="Impl"
+  psiPackage="com.influxdata.intellijflux.language.psi"
+  psiImplPackage="com.influxdata.intellijflux.language.psi.impl"
+
+  elementTypeHolderClass="com.influxdata.intellijflux.language.psi.FluxTypes"
+  elementTypeClass="com.influxdata.intellijflux.language.psi.FluxElementType"
+  tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
+}
+
+simpleFile ::= item_*
+
+private item_ ::= (property|COMMENT|CRLF)
+
+property ::= (KEY? SEPARATOR VALUE?) | KEY

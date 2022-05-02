@@ -2,5 +2,8 @@ package com.influxdata.intellijflux.language
 
 import com.intellij.lang.Language
 
-object FluxLanguage : Language("Flux") {
+class FluxLanguage : Language("Flux") {
+    companion object {
+        val INSTANCE = FluxLanguage()
+    }
 }
