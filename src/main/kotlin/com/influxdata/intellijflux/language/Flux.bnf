@@ -1,20 +1,86 @@
 {
-  parserClass="com.influxdata.intellijflux.language.parser.FluxParser"
+    parserClass="com.influxdata.intellijflux.language.parser.FluxParser"
+    parserUtilClass="com.influxdata.intellijflux.language.FluxParserUtil"
+    extends="com.intellij.extapi.psi.ASTWrapperPsiElement"
 
-  extends="com.intellij.extapi.psi.ASTWrapperPsiElement"
+    psiClassPrefix="Flux"
+    psiImplClassSuffix="Impl"
+    psiPackage="com.influxdata.intellijflux.language.psi"
+    psiImplPackage="com.influxdata.intellijflux.language.psi.impl"
 
-  psiClassPrefix="Simple"
-  psiImplClassSuffix="Impl"
-  psiPackage="com.influxdata.intellijflux.language.psi"
-  psiImplPackage="com.influxdata.intellijflux.language.psi.impl"
+    elementTypeHolderClass="com.influxdata.intellijflux.language.psi.FluxTypes"
+    elementTypeClass="com.influxdata.intellijflux.language.psi.FluxElementType"
+    tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
 
-  elementTypeHolderClass="com.influxdata.intellijflux.language.psi.FluxTypes"
-  elementTypeClass="com.influxdata.intellijflux.language.psi.FluxElementType"
-  tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
+    tokens=[
+        comment='regexp://.*'
+        // FIXME: figure out how to suppress this rule from generating nodes
+        // FIXME: spec only names \n as the linesep -- what about \r\n and \r?
+        space='regexp:(\r\n|\r|\n|\s)+'
+
+        COL=':'
+        SEMI=';'
+        EQ='='
+        LP='('
+        RP=')'
+        DOT='.'
+        BACKSLASH='\'
+
+        // FIXME: less detailed than the flux spec. Just looks for anything falling between two unescaped double quotes.
+        string_lit='regexp:"([^"\\]|\\.)*"'
+        // FIXME: less detailed than the flux spec. Just looks for anything falling between two unescaped slashes.
+        regex_lit='regexp:/([^/\\]|\\.)*/'
+        unicode_digit="regexp:\p{N}"
+        letter="regexp:(\p{L}|_)"
+
+        plus_op='+'
+        minus_op='-'
+        mult_op='*'
+        div_op='/'
+        bang_op='!'
+    ]
+    name(".*_op")='operartor'
+    name(".*_expr")='expression'
+    extends(".*_expr")=expr
 }
 
-simpleFile ::= item_*
+root ::= root_item *
 
-private item_ ::= (property|COMMENT|CRLF)
+private external EOF ::= <<eof>>
 
-property ::= (KEY? SEPARATOR VALUE?) | KEY
+private root_item ::=
+    !EOF space
+    | string_lit
+    | float_lit
+    | date_time_lit
+    | duration_lit
+    | int_lit
+    | identifier
+
+identifier ::= letter (letter | unicode_digit)*
+
+decimal_digit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+
+private nonzero_decimal_digit ::= !"0" decimal_digit
+int_lit ::= "0" | nonzero_decimal_digit decimal_digit*
+
+float_lit ::= decimals DOT decimals? | DOT decimals
+decimals ::= decimal_digit+
+
+
+duration_lit  ::= (duration_magnitude duration_unit)+
+duration_magnitude ::= decimal_digit+
+duration_unit ::= "y" | "mo" | "w" | "d" | "h" | "m" | "s" | "ms" | "us" | "µs" | "ns"
+
+
+date_time_lit ::= date [ "T" time ]
+date ::= year_lit "-" month "-" day
+year_lit ::= decimal_digit decimal_digit decimal_digit decimal_digit
+month ::= decimal_digit decimal_digit
+day ::= decimal_digit decimal_digit
+time ::= hour ":" minute ":" second [ fractional_second ] [ time_offset ]
+hour ::= decimal_digit decimal_digit
+minute ::= decimal_digit decimal_digit
+second ::= decimal_digit decimal_digit
+fractional_second ::= "."  decimal_digit+
+time_offset ::= "Z" | ("+" | "-") hour ":" minute
