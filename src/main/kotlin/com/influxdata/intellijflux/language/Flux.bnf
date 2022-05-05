@@ -13,18 +13,18 @@
     tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
 
     tokens=[
-        comment='regexp://.*'
-        // FIXME: figure out how to suppress this rule from generating nodes
-        // FIXME: spec only names \n as the linesep -- what about \r\n and \r?
-        space='regexp:(\r\n|\r|\n|\s)+'
-
+        comment='regexp://.*(\n)?'
+        space='regexp:(\s|\n)+'
         COL=':'
         SEMI=';'
         EQ='='
         LP='('
         RP=')'
+        LB='{'
+        RB='}'
         DOT='.'
-        BACKSLASH='\'
+        ARROW="=>"
+        PIPE_FORWARD="|>"
 
         // FIXME: less detailed than the flux spec. Just looks for anything falling between two unescaped double quotes.
         string_lit='regexp:"([^"\\]|\\.)*"'
@@ -39,24 +39,27 @@
         div_op='/'
         bang_op='!'
     ]
-    name(".*_op")='operartor'
-    name(".*_expr")='expression'
-    extends(".*_expr")=expr
+//    name(".*_op")='operartor'
+    name(".*Expr")='expression'
+//    extends(".*Expr")=expr
 }
 
 root ::= root_item *
 
 private external EOF ::= <<eof>>
+// token_sep is a workaround for handling comments that appear inside other
+// larger structures.
+// Ex: comments at the end of a line inside a line-separated parameter list or
+// record fields.
+private token_sep ::= (space | comment)+
 
 private root_item ::=
-    !EOF space
-    | string_lit
-    | float_lit
-    | date_time_lit
-    | duration_lit
-    | int_lit
-    | identifier
+    !EOF
+    token_sep
+    | option
+    | Expression
 
+// FIXME: need to figure out how to model member access - `pkg.ident`
 identifier ::= letter (letter | unicode_digit)*
 
 decimal_digit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
@@ -84,3 +87,35 @@ minute ::= decimal_digit decimal_digit
 second ::= decimal_digit decimal_digit
 fractional_second ::= "."  decimal_digit+
 time_offset ::= "Z" | ("+" | "-") hour ":" minute
+
+option ::= "option" identifier token_sep? EQ token_sep? ValueExpr
+
+Expression ::= AssignmentExpr | PipeExpr | ValueExpr
+
+ValueExpr ::= FuncExpr | CallExpr | CompositeExpr | LiteralExpr | identifier
+LiteralExpr ::=
+    float_lit
+    | date_time_lit
+    | duration_lit
+    | int_lit
+    | string_lit
+    | regex_lit
+
+
+CallExpr ::= identifier token_sep? LP token_sep? [param_list] token_sep? RP
+param_list ::= identifier token_sep? COL token_sep? ValueExpr token_sep? ["," token_sep? param_list?]
+AssignmentExpr ::= identifier token_sep? EQ token_sep? ValueExpr
+FuncExpr ::= LP token_sep? param_list? RP token_sep? ARROW token_sep? fn_body
+fn_body ::= ValueExpr // FIXME: needs to model blocks, parens, the `return` kw....
+
+CompositeExpr ::= record_lit
+record_lit ::= LB token_sep? param_list token_sep? RB
+
+// a |> b |> c ...
+// FIXME: fails to parse recursive -- bails at 2nd pipe forward
+PipeExpr ::=
+    ValueExpr
+    token_sep?
+    PIPE_FORWARD
+    token_sep?
+    (ValueExpr | PIPE_FORWARD token_sep? PipeExpr)
