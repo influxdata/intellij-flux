@@ -41,7 +41,7 @@
     ]
 //    name(".*_op")='operartor'
     name(".*Expr")='expression'
-//    extends(".*Expr")=expr
+    extends(".*Expr")=Expression
 }
 
 root ::= root_item *
@@ -59,8 +59,9 @@ private root_item ::=
     | option
     | Expression
 
-// FIXME: need to figure out how to model member access - `pkg.ident`
 identifier ::= letter (letter | unicode_digit)*
+// Specifically targeting `pkg.ident` use cases... not arbitrary member expressions.
+qualified_ident ::= identifier token_sep? DOT token_sep? (identifier | qualified_ident) {extends=identifier}
 
 decimal_digit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
 
@@ -88,11 +89,17 @@ second ::= decimal_digit decimal_digit
 fractional_second ::= "."  decimal_digit+
 time_offset ::= "Z" | ("+" | "-") hour ":" minute
 
-option ::= "option" identifier token_sep? EQ token_sep? ValueExpr
+option ::= "option" token_sep? AssignmentExpr
 
-Expression ::= AssignmentExpr | PipeExpr | ValueExpr
+Expression ::=
+    AssignmentExpr
+    | FuncExpr
+    | CallExpr
+    | CompositeExpr
+    | LiteralExpr
+    | IdentExpr
+    | PipeExpr
 
-ValueExpr ::= FuncExpr | CallExpr | CompositeExpr | LiteralExpr | identifier
 LiteralExpr ::=
     float_lit
     | date_time_lit
@@ -102,20 +109,22 @@ LiteralExpr ::=
     | regex_lit
 
 
+// TODO: Label?
+IdentExpr ::= qualified_ident | identifier
 CallExpr ::= identifier token_sep? LP token_sep? [param_list] token_sep? RP
-param_list ::= identifier token_sep? COL token_sep? ValueExpr token_sep? ["," token_sep? param_list?]
-AssignmentExpr ::= identifier token_sep? EQ token_sep? ValueExpr
+param_list ::= identifier token_sep? COL token_sep? Expression token_sep? ["," token_sep? param_list?]
 FuncExpr ::= LP token_sep? param_list? RP token_sep? ARROW token_sep? fn_body
-fn_body ::= ValueExpr // FIXME: needs to model blocks, parens, the `return` kw....
+fn_body ::= Expression // FIXME: needs to model blocks, parens, the `return` kw....
+// XXX: should the LHS be an IdentExpr?
+AssignmentExpr ::= IdentExpr token_sep? EQ token_sep? Expression
 
 CompositeExpr ::= record_lit
 record_lit ::= LB token_sep? param_list token_sep? RB
 
 // a |> b |> c ...
-// FIXME: fails to parse recursive -- bails at 2nd pipe forward
 PipeExpr ::=
-    ValueExpr
+    Expression
     token_sep?
     PIPE_FORWARD
     token_sep?
-    (ValueExpr | PIPE_FORWARD token_sep? PipeExpr)
+    Expression {rightAssociative=true}
