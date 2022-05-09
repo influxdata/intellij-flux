@@ -1,0 +1,213 @@
+{
+    parserClass="com.influxdata.intellijflux.language.parser.FluxParser"
+    parserUtilClass="com.influxdata.intellijflux.language.FluxParserUtil"
+    extends="com.intellij.extapi.psi.ASTWrapperPsiElement"
+
+    psiClassPrefix="Flux"
+    psiImplClassSuffix="Impl"
+    psiPackage="com.influxdata.intellijflux.language.psi"
+    psiImplPackage="com.influxdata.intellijflux.language.psi.impl"
+
+    elementTypeHolderClass="com.influxdata.intellijflux.language.psi.FluxTypes"
+    elementTypeClass="com.influxdata.intellijflux.language.psi.FluxElementType"
+    tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
+
+    tokens=[
+
+        // XXX: less detailed than the flux spec. Just looks for anything falling between two unescaped double quotes.
+        string_lit='regexp:"([^"\\]|\\.)*"'
+        // XXX: less detailed than the flux spec. Just looks for anything falling between two slashes on the same line.
+        regex_lit='regexp:/[^\n]+/'
+        id="regexp:[\p{L}_][\p{L}\p{N}_]*"
+
+        line_comment='regexp://.*(\n)?'
+        // Both needed to get tokens to split correctly...
+        // The `space_` token should not be referenced in the grammar else it
+        // won't work properly.
+        // The `space` token is used to drive the `EmptyStatement` which
+        // apparently is also required to get things splitting nicely.
+        space_=' '
+        space='regexp:(\s|\n|//.*(\n)?)+'
+    ]
+    name(".*Expression")='expression'
+    extends(".*Expression")=ExpressionStatement
+    extends(".*Statement")=Statement
+    extends(".*(Literal|_lit)")=ExpressionStatement
+}
+
+File ::=
+    [ PackageClause ]
+    [ ImportList ]
+    StatementList
+
+identifier ::= id
+
+EmptyStatement ::= space
+ImportList ::= ImportDeclaration+
+PackageClause ::= "package" space? identifier
+ImportDeclaration ::= "import" [space? identifier] space? string_lit
+ReturnStatement ::= "return" space Expression
+ExpressionStatement ::= Expression
+StatementList ::= !<<EOF>> Statement* {pin=2 recoverWhile=stmt_recover}
+Statement ::=
+    BuiltinStatement
+    | OptionAssignment
+    | VariableAssignment
+    | ReturnStatement
+    | ExpressionStatement
+    | EmptyStatement
+
+private stmt_recover ::= !space
+
+
+
+VariableAssignment ::= identifier "=" Expression {extends=Statement}
+OptionAssignment ::= "option" [identifier "."] VariableAssignment {extends=Statement}
+
+Block ::= "{" space? StatementList space? "}"
+
+BuiltinStatement ::= "builtin" space identifier space? ":" space? Signature
+Signature ::= MonoType [space? "where" space? Constraints]
+MonoType ::= Tvar | Basic | Array | Record | Function
+Basic ::= "int" | "uint" | "float" | "string" | "bool" | "time" | "duration" | "bytes" | "regexp"
+Array ::= "[" space? MonoType space? "]"
+Record ::= ( "{" space? [TProperties] space? "}" ) | ( "{" space? Tvar space? "with" space? TProperties space? "}" )
+Function ::= "(" space? [Parameters] space? ")" space? "=>" space? MonoType
+Tvar ::=
+    "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+    | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+
+TProperties ::= <<list TProperty>>
+TProperty ::= Label space? ":" space? MonoType
+Label ::= identifier | string_lit
+
+Parameters ::= <<list Parameter>>
+Parameter ::= [("<-" | "?") space? ] identifier space? ":" space? MonoType
+
+Constraints ::= <<list Constraint>>
+Constraint ::= Tvar space? ":" space? Kinds
+Kinds ::= identifier space? ("+" space? identifier)*
+
+private meta list ::= <<p>> space? ("," space? <<p>> space?)* ","?
+private external EOF ::= <<eof>>
+
+// Literals
+decimal_digit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+private nonzero_decimal_digit ::= !"0" decimal_digit
+int_lit ::= "0" | nonzero_decimal_digit decimal_digit*
+
+float_lit ::= decimals "." decimals? | "." decimals
+decimals ::= decimal_digit+
+
+duration_lit  ::= (duration_magnitude duration_unit)+
+duration_magnitude ::= decimal_digit+
+duration_unit ::= "y" | "mo" | "w" | "d" | "h" | "m" | "s" | "ms" | "us" | "µs" | "ns"
+
+date_time_lit ::= date [ "T" time ]
+date ::= year_lit "-" month "-" day
+year_lit ::= decimal_digit decimal_digit decimal_digit decimal_digit
+month ::= decimal_digit decimal_digit
+day ::= decimal_digit decimal_digit
+time ::= hour ":" minute ":" second [ fractional_second ] [ time_offset ]
+hour ::= decimal_digit decimal_digit
+minute ::= decimal_digit decimal_digit
+second ::= decimal_digit decimal_digit
+fractional_second ::= "."  decimal_digit+
+time_offset ::= "Z" | ("+" | "-") hour ":" minute
+
+
+FunctionLiteral ::= fn_params space? "=>" space? fn_body
+fn_params ::= "(" space? [ fn_param_list space? ] ")"
+fn_param_list ::= <<list fn_param>>
+fn_param ::= identifier [ space? "=" space? Expression ]
+fn_body ::= Expression | Block
+
+RecordLiteral ::= "{" space? RecordBody space? "}"
+RecordBody ::= WithProperties | PropertyList
+WithProperties ::= identifier space? "with" space? PropertyList
+PropertyList ::= <<list Property>>
+Property ::=
+    identifier [ space? ":" space? Expression ]
+    | string_lit space? ":" space? Expression
+
+ArrayLiteral ::= "[" space? ExpressionList space? "]"
+ExpressionList ::= [ <<list Expression>> ]
+
+DictLiteral ::= EmptyDict | "[" space? AssociativeList space? "]"
+EmptyDict ::= "[" space? ":" space? "]"
+AssociativeList ::= <<list Association>>
+Association ::= Expression space? ":" space? Expression
+
+pipe_receive_lit ::= "<-"
+
+Literal ::=
+    FunctionLiteral
+    | DictLiteral
+    | ArrayLiteral
+    | RecordLiteral
+    | regex_lit
+    | string_lit
+    | pipe_receive_lit
+    | duration_lit
+    | date_time_lit
+    | float_lit
+    | int_lit
+
+// Expressions
+private Expression ::=
+    PostfixExpression
+    | PipeExpression
+    | ExponentExpression
+    | MultiplicativeExpression
+    | AdditiveExpression
+    | ComparisonExpression
+    | UnaryExpression
+    | IndexExpression
+    | LogicalExpression
+    | ConditionalExpression
+    | MemberExpression
+    | CallExpression
+    | PrimaryExpression
+
+
+PrimaryExpression ::= Literal | "(" space? Expression space? ")" | identifier
+CallExpression ::= "(" space? [PropertyList] space? ")"
+IndexExpression ::= "[" space? Expression space? "]"
+MemberExpression ::= DotExpression | MemberBracketExpression
+DotExpression ::= "." space? identifer
+MemberBracketExpression ::= "[" space? string_lit space? "]"
+
+// Operators etc
+ConditionalExpression       ::= LogicalExpression
+                            | "if" space? Expression space? "then" space? Expression space? "else" space? Expression
+LogicalExpression           ::= UnaryLogicalExpression
+                            | LogicalExpression space? LogicalOperator space? UnaryLogicalExpression
+LogicalOperator             ::= "and" | "or"
+UnaryLogicalExpression      ::= ComparisonExpression
+                            | UnaryLogicalOperator space? UnaryLogicalExpression
+UnaryLogicalOperator        ::= "not" | "exists"
+ComparisonExpression        ::= MultiplicativeExpression
+                            | ComparisonExpression space? ComparisonOperator space? MultiplicativeExpression
+ComparisonOperator          ::= "==" | "!=" | "<" | "<=" | ">" | ">=" | "=~" | "!~"
+AdditiveExpression          ::= MultiplicativeExpression
+                            | AdditiveExpression space? AdditiveOperator space? MultiplicativeExpression
+AdditiveOperator            ::= "+" | "-"
+// XXX: in spec, alternate showed ExponentOperator while MultiplicativeOperator
+// was unused. Guessing it should go here.
+MultiplicativeExpression    ::= ExponentExpression
+                            | ExponentExpression space? MultiplicativeOperator space? MultiplicativeExpression
+MultiplicativeOperator      ::= "*" | "/" | "%"
+ExponentExpression          ::= PipeExpression
+                            | ExponentExpression space? ExponentOperator space? PipeExpression
+ExponentOperator            ::= "^"
+PipeExpression              ::= PostfixExpression
+                            | PipeExpression space? PipeOperator space? UnaryExpression
+PipeOperator                ::= "|>"
+UnaryExpression             ::= PostfixExpression
+                            | PrefixOperator space? UnaryExpression
+PrefixOperator              ::= "+" | "-"
+PostfixExpression           ::= PrimaryExpression
+                            | PostfixExpression space? PostfixOperator
+PostfixOperator             ::= MemberExpression
+                            | CallExpression
+                            | IndexExpression
