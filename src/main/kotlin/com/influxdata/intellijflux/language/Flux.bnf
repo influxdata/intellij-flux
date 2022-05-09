@@ -13,69 +13,95 @@
     tokenTypeClass="com.influxdata.intellijflux.language.psi.FluxTokenType"
 
     tokens=[
-        comment='regexp://.*(\n)?'
-        space='regexp:(\s|\n)+'
-        COL=':'
-        SEMI=';'
-        EQ='='
-        LP='('
-        RP=')'
-        LB='{'
-        RB='}'
-        DOT='.'
-        ARROW="=>"
-        PIPE_FORWARD="|>"
 
-        // FIXME: less detailed than the flux spec. Just looks for anything falling between two unescaped double quotes.
+        // XXX: less detailed than the flux spec. Just looks for anything falling between two unescaped double quotes.
         string_lit='regexp:"([^"\\]|\\.)*"'
-        // FIXME: less detailed than the flux spec. Just looks for anything falling between two unescaped slashes.
-        regex_lit='regexp:/([^/\\]|\\.)*/'
-        unicode_digit="regexp:\p{N}"
-        letter="regexp:(\p{L}|_)"
+        // XXX: less detailed than the flux spec. Just looks for anything falling between two slashes on the same line.
+        regex_lit='regexp:/[^\n]+/'
+        id="regexp:[\p{L}_][\p{L}\p{N}_]*"
 
-        plus_op='+'
-        minus_op='-'
-        mult_op='*'
-        div_op='/'
-        bang_op='!'
+        line_comment='regexp://.*(\n)?'
+        // Both needed to get tokens to split correctly...
+        // The `space_` token should not be referenced in the grammar else it
+        // won't work properly.
+        // The `space` token is used to drive the `EmptyStatement` which
+        // apparently is also required to get things splitting nicely.
+        space_=' '
+        space='regexp:(\s|\n|//.*(\n)?)+'
     ]
-//    name(".*_op")='operartor'
-    name(".*Expr")='expression'
-    extends(".*Expr")=Expression
+    name(".*Expression")='expression'
+    extends(".*Expression")=ExpressionStatement
+    extends(".*Statement")=Statement
+    extends(".*(Literal|_lit)")=ExpressionStatement
 }
 
-root ::= root_item *
+File ::=
+    [ PackageClause ]
+    [ ImportList ]
+    StatementList
 
+identifier ::= id
+
+EmptyStatement ::= space
+ImportList ::= ImportDeclaration+
+PackageClause ::= "package" space? identifier
+ImportDeclaration ::= "import" [space? identifier] space? string_lit
+ReturnStatement ::= "return" space Expression
+ExpressionStatement ::= Expression
+StatementList ::= !<<EOF>> Statement* {pin=2 recoverWhile=stmt_recover}
+Statement ::=
+    BuiltinStatement
+    | OptionAssignment
+    | VariableAssignment
+    | ReturnStatement
+    | ExpressionStatement
+    | EmptyStatement
+
+private stmt_recover ::= !space
+
+
+
+VariableAssignment ::= identifier "=" Expression {extends=Statement}
+OptionAssignment ::= "option" [identifier "."] VariableAssignment {extends=Statement}
+
+Block ::= "{" space? StatementList space? "}"
+
+BuiltinStatement ::= "builtin" space identifier space? ":" space? Signature
+Signature ::= MonoType [space? "where" space? Constraints]
+MonoType ::= Tvar | Basic | Array | Record | Function
+Basic ::= "int" | "uint" | "float" | "string" | "bool" | "time" | "duration" | "bytes" | "regexp"
+Array ::= "[" space? MonoType space? "]"
+Record ::= ( "{" space? [TProperties] space? "}" ) | ( "{" space? Tvar space? "with" space? TProperties space? "}" )
+Function ::= "(" space? [Parameters] space? ")" space? "=>" space? MonoType
+Tvar ::=
+    "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+    | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+
+TProperties ::= <<list TProperty>>
+TProperty ::= Label space? ":" space? MonoType
+Label ::= identifier | string_lit
+
+Parameters ::= <<list Parameter>>
+Parameter ::= [("<-" | "?") space? ] identifier space? ":" space? MonoType
+
+Constraints ::= <<list Constraint>>
+Constraint ::= Tvar space? ":" space? Kinds
+Kinds ::= identifier space? ("+" space? identifier)*
+
+private meta list ::= <<p>> space? ("," space? <<p>> space?)* ","?
 private external EOF ::= <<eof>>
-// token_sep is a workaround for handling comments that appear inside other
-// larger structures.
-// Ex: comments at the end of a line inside a line-separated parameter list or
-// record fields.
-private token_sep ::= (space | comment)+
 
-private root_item ::=
-    !EOF
-    token_sep
-    | option
-    | Expression
-
-identifier ::= letter (letter | unicode_digit)*
-// Specifically targeting `pkg.ident` use cases... not arbitrary member expressions.
-qualified_ident ::= identifier token_sep? DOT token_sep? (identifier | qualified_ident) {extends=identifier}
-
+// Literals
 decimal_digit ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-
 private nonzero_decimal_digit ::= !"0" decimal_digit
 int_lit ::= "0" | nonzero_decimal_digit decimal_digit*
 
-float_lit ::= decimals DOT decimals? | DOT decimals
+float_lit ::= decimals "." decimals? | "." decimals
 decimals ::= decimal_digit+
-
 
 duration_lit  ::= (duration_magnitude duration_unit)+
 duration_magnitude ::= decimal_digit+
 duration_unit ::= "y" | "mo" | "w" | "d" | "h" | "m" | "s" | "ms" | "us" | "µs" | "ns"
-
 
 date_time_lit ::= date [ "T" time ]
 date ::= year_lit "-" month "-" day
@@ -89,42 +115,99 @@ second ::= decimal_digit decimal_digit
 fractional_second ::= "."  decimal_digit+
 time_offset ::= "Z" | ("+" | "-") hour ":" minute
 
-option ::= "option" token_sep? AssignmentExpr
 
-Expression ::=
-    AssignmentExpr
-    | FuncExpr
-    | CallExpr
-    | CompositeExpr
-    | LiteralExpr
-    | IdentExpr
-    | PipeExpr
+FunctionLiteral ::= fn_params space? "=>" space? fn_body
+fn_params ::= "(" space? [ fn_param_list space? ] ")"
+fn_param_list ::= <<list fn_param>>
+fn_param ::= identifier [ space? "=" space? Expression ]
+fn_body ::= Expression | Block
 
-LiteralExpr ::=
-    float_lit
-    | date_time_lit
-    | duration_lit
-    | int_lit
-    | string_lit
+RecordLiteral ::= "{" space? RecordBody space? "}"
+RecordBody ::= WithProperties | PropertyList
+WithProperties ::= identifier space? "with" space? PropertyList
+PropertyList ::= <<list Property>>
+Property ::=
+    identifier [ space? ":" space? Expression ]
+    | string_lit space? ":" space? Expression
+
+ArrayLiteral ::= "[" space? ExpressionList space? "]"
+ExpressionList ::= [ <<list Expression>> ]
+
+DictLiteral ::= EmptyDict | "[" space? AssociativeList space? "]"
+EmptyDict ::= "[" space? ":" space? "]"
+AssociativeList ::= <<list Association>>
+Association ::= Expression space? ":" space? Expression
+
+pipe_receive_lit ::= "<-"
+
+Literal ::=
+    FunctionLiteral
+    | DictLiteral
+    | ArrayLiteral
+    | RecordLiteral
     | regex_lit
+    | string_lit
+    | pipe_receive_lit
+    | duration_lit
+    | date_time_lit
+    | float_lit
+    | int_lit
+
+// Expressions
+private Expression ::=
+    PostfixExpression
+    | PipeExpression
+    | ExponentExpression
+    | MultiplicativeExpression
+    | AdditiveExpression
+    | ComparisonExpression
+    | UnaryExpression
+    | IndexExpression
+    | LogicalExpression
+    | ConditionalExpression
+    | MemberExpression
+    | CallExpression
+    | PrimaryExpression
 
 
-// TODO: Label?
-IdentExpr ::= qualified_ident | identifier
-CallExpr ::= identifier token_sep? LP token_sep? [param_list] token_sep? RP
-param_list ::= identifier token_sep? COL token_sep? Expression token_sep? ["," token_sep? param_list?]
-FuncExpr ::= LP token_sep? param_list? RP token_sep? ARROW token_sep? fn_body
-fn_body ::= Expression // FIXME: needs to model blocks, parens, the `return` kw....
-// XXX: should the LHS be an IdentExpr?
-AssignmentExpr ::= IdentExpr token_sep? EQ token_sep? Expression
+PrimaryExpression ::= Literal | "(" space? Expression space? ")" | identifier
+CallExpression ::= "(" space? [PropertyList] space? ")"
+IndexExpression ::= "[" space? Expression space? "]"
+MemberExpression ::= DotExpression | MemberBracketExpression
+DotExpression ::= "." space? identifer
+MemberBracketExpression ::= "[" space? string_lit space? "]"
 
-CompositeExpr ::= record_lit
-record_lit ::= LB token_sep? param_list token_sep? RB
-
-// a |> b |> c ...
-PipeExpr ::=
-    Expression
-    token_sep?
-    PIPE_FORWARD
-    token_sep?
-    Expression {rightAssociative=true}
+// Operators etc
+ConditionalExpression       ::= LogicalExpression
+                            | "if" space? Expression space? "then" space? Expression space? "else" space? Expression
+LogicalExpression           ::= UnaryLogicalExpression
+                            | LogicalExpression space? LogicalOperator space? UnaryLogicalExpression
+LogicalOperator             ::= "and" | "or"
+UnaryLogicalExpression      ::= ComparisonExpression
+                            | UnaryLogicalOperator space? UnaryLogicalExpression
+UnaryLogicalOperator        ::= "not" | "exists"
+ComparisonExpression        ::= MultiplicativeExpression
+                            | ComparisonExpression space? ComparisonOperator space? MultiplicativeExpression
+ComparisonOperator          ::= "==" | "!=" | "<" | "<=" | ">" | ">=" | "=~" | "!~"
+AdditiveExpression          ::= MultiplicativeExpression
+                            | AdditiveExpression space? AdditiveOperator space? MultiplicativeExpression
+AdditiveOperator            ::= "+" | "-"
+// XXX: in spec, alternate showed ExponentOperator while MultiplicativeOperator
+// was unused. Guessing it should go here.
+MultiplicativeExpression    ::= ExponentExpression
+                            | ExponentExpression space? MultiplicativeOperator space? MultiplicativeExpression
+MultiplicativeOperator      ::= "*" | "/" | "%"
+ExponentExpression          ::= PipeExpression
+                            | ExponentExpression space? ExponentOperator space? PipeExpression
+ExponentOperator            ::= "^"
+PipeExpression              ::= PostfixExpression
+                            | PipeExpression space? PipeOperator space? UnaryExpression
+PipeOperator                ::= "|>"
+UnaryExpression             ::= PostfixExpression
+                            | PrefixOperator space? UnaryExpression
+PrefixOperator              ::= "+" | "-"
+PostfixExpression           ::= PrimaryExpression
+                            | PostfixExpression space? PostfixOperator
+PostfixOperator             ::= MemberExpression
+                            | CallExpression
+                            | IndexExpression
